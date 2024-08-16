@@ -1,0 +1,86 @@
+# @format
+
+version: '3.9'
+
+services:
+  nats-server:
+    image: nats:latest
+    ports:
+      - '8222:8222'
+      - '4222:4222'
+      - '6222:6222'
+
+  client-gateway:
+    build: ./client-gateway
+    ports:
+      - '${CLIENT_GATEWAY_PORT}:${CLIENT_GATEWAY_PORT}'
+    volumes:
+      - ./client-gateway/src:/usr/src/app/src
+    command: npm run start:dev
+    environment:
+      - PORT=3000
+      - NATS_SERVERS=${NATS_SERVERS}
+
+  auth-ms:
+    build: ./auth-ms
+    volumes:
+      - ./auth-ms/src:/usr/src/app/src
+    command: npm run start:dev
+    environment:
+      - PORT=${AUTH_PORT}
+      - MONGO_URL=${AUTH_MONGO_URL}
+      - SECRET_JWT=${AUTH_SECRET_JWT}
+      - NATS_SERVERS=${NATS_SERVERS}
+
+  products-ms:
+    build: ./products-ms
+    volumes:
+      - ./products-ms/src:/usr/src/app/src
+    command: npm run start:dev
+    environment:
+      - PORT=3001
+      - NATS_SERVERS=${NATS_SERVERS}
+      - DATABASE_URL=file:./dev.db
+
+  orders-ms:
+    depends_on:
+      - orders-db
+    build: ./orders-ms
+    volumes:
+      - ./orders-ms/src:/usr/src/app/src
+    command: npm run start:dev
+    environment:
+      - PORT=${ORDERS_PORT}
+      - POSTGRES_USER=${ORDERS_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${ORDERS_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${ORDERS_POSTGRES_DB}
+      - POSTGRES_PORT=${ORDERS_POSTGRES_PORT}
+      - POSTGRES_HOST=orders-db
+      - NATS_SERVERS=${NATS_SERVERS}
+
+  payments-ms:
+    build: ./payments-ms
+    ports:
+      - '${PAYMENTS_PORT}:${PAYMENTS_PORT}'
+    volumes:
+      - ./payments-ms/src:/usr/src/app/src
+    command: npm run start:dev
+    environment:
+      - NATS_SERVERS=${NATS_SERVERS}
+      - PORT=${PAYMENTS_PORT}
+      - STRIPE_SECRET=${STRIPE_SECRET}
+      - STRIPE_SUCCESS_URL=${STRIPE_SUCCESS_URL}
+      - STRIPE_CANCEL_URL=${STRIPE_CANCEL_URL}
+      - STRIPE_ENDPOINT_SECRET=${STRIPE_ENDPOINT_SECRET}
+  orders-db:
+    container_name: orders_database
+    image: postgres:16.2
+    restart: always
+    volumes:
+      - ./orders-ms/postgres:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=asda1234
+      - POSTGRES_DB=ordersdb
